@@ -1,0 +1,11 @@
+[y fs] = wavread('test.wav');
+
+dist = zeros(1,10);
+
+for k=1:10
+    dist(k) = distance(codebook(k), get_mfccs(y, fs));
+end
+
+[min_dist, min_index] = min(dist);
+
+disp

@@ -1,0 +1,398 @@
+
+<!DOCTYPE html
+  PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+   <head>
+      <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+   
+      <!--
+This HTML is auto-generated from an M-file.
+To make changes, update the M-file and republish this document.
+      -->
+      <title>code</title>
+      <meta name="generator" content="MATLAB 7.8">
+      <meta name="date" content="2013-10-31">
+      <meta name="m-file" content="code"><style type="text/css">
+
+body {
+  background-color: white;
+  margin:10px;
+}
+
+h1 {
+  color: #990000; 
+  font-size: x-large;
+}
+
+h2 {
+  color: #990000;
+  font-size: medium;
+}
+
+/* Make the text shrink to fit narrow windows, but not stretch too far in 
+wide windows. */ 
+p,h1,h2,div.content div {
+  max-width: 600px;
+  /* Hack for IE6 */
+  width: auto !important; width: 600px;
+}
+
+pre.codeinput {
+  background: #EEEEEE;
+  padding: 10px;
+}
+@media print {
+  pre.codeinput {word-wrap:break-word; width:100%;}
+} 
+
+span.keyword {color: #0000FF}
+span.comment {color: #228B22}
+span.string {color: #A020F0}
+span.untermstring {color: #B20000}
+span.syscmd {color: #B28C00}
+
+pre.codeoutput {
+  color: #666666;
+  padding: 10px;
+}
+
+pre.error {
+  color: red;
+}
+
+p.footer {
+  text-align: right;
+  font-size: xx-small;
+  font-weight: lighter;
+  font-style: italic;
+  color: gray;
+}
+
+  </style></head>
+   <body>
+      <div class="content">
+         <h1></h1>
+         <!--introduction-->
+         <!--/introduction-->
+         <h2>Contents</h2>
+         <div>
+            <ul>
+               <li><a href="#3">Speech signal</a></li>
+               <li><a href="#4">Pre-Emphasized Windowed Signal</a></li>
+               <li><a href="#5">Cepstral Analysis</a></li>
+               <li><a href="#7">Estimating Spectral Envelope using Cepstral Coefficients</a></li>
+               <li><a href="#8">Pitch Estimation</a></li>
+               <li><a href="#10">Comparison of estimations using 10th order LPC and 13 Cepstral coefficients</a></li>
+            </ul>
+         </div><pre class="codeinput">clear <span class="string">all</span>
+close <span class="string">all</span>
+clc
+
+<span class="comment">%-----ANKIT AGRAWAL</span>
+<span class="comment">%-----10D070027</span>
+
+sounds = [<span class="string">'aa'</span>, <span class="string">'nn'</span>, <span class="string">'ee'</span>, <span class="string">'ss'</span>, <span class="string">'as'</span>];
+<span class="keyword">for</span> index = 1:5
+</pre><pre class="codeinput">    sound = sounds(2*index-1:2*index);
+</pre><h2>Speech signal<a name="3"></a></h2>
+         <p>Preparing the initial parameters</p><pre class="codeinput">    <span class="keyword">if</span> sound == <span class="string">'as'</span>
+        sound_name = <span class="string">'aa resynthesized'</span>;
+    <span class="keyword">else</span>
+        sound_name = sound;
+    <span class="keyword">end</span>
+    [x fs] = wavread(strcat(sound, <span class="string">'.wav'</span>));
+    x = x';
+    nfft = 1024;
+    window_len = 0.03*fs;
+    n = 0:window_len-1;
+    hw = 0.54-0.46*cos(2*pi*n/(window_len-1));
+
+    freq_axis = (fs/nfft).*(0:(nfft/2 - 1));
+    time_axis = 1000*[0:(1/fs):(window_len - 1)/fs];
+</pre><h2>Pre-Emphasized Windowed Signal<a name="4"></a></h2><pre class="codeinput">    b = 0.95;
+    x_pe = zeros(1, length(x));
+    x_pe(1) = x(1);
+    <span class="keyword">for</span> n = 2:length(x)
+        x_pe(n) = x(n) - b*x(n-1);
+    <span class="keyword">end</span>
+
+    Windowed_signal_preemp = x_pe(100:100+window_len-1).*hw;
+    spectrum_preemp = fft(Windowed_signal_preemp,nfft);
+
+    figure()
+    subplot(211)
+    plot(time_axis, Windowed_signal_preemp)
+    grid <span class="string">on</span>
+    title(strcat(sound_name, <span class="string">' Preemphasized Windowed Signal'</span>));
+    xlabel(<span class="string">'Time (ms)'</span>);
+    grid <span class="string">on</span>;
+    subplot(212)
+    plot(freq_axis, log(abs(spectrum_preemp(1:(nfft/2)))))
+    grid <span class="string">on</span>
+    title(strcat(sound_name, <span class="string">' Log Magnitude Spectrum of Preemphasized Windowed Signal'</span>));
+    xlabel(<span class="string">'Frequency (Hz)'</span>);
+    grid <span class="string">on</span>;
+</pre><img vspace="5" hspace="5" src="code_01.png" alt=""> <img vspace="5" hspace="5" src="code_09.png" alt=""> <img vspace="5" hspace="5" src="code_17.png" alt=""> <img vspace="5" hspace="5" src="code_25.png" alt=""> <img vspace="5" hspace="5" src="code_33.png" alt=""> <h2>Cepstral Analysis<a name="5"></a></h2><pre class="codeinput">    cepstrum_preemp = ifft(log(abs(fft(Windowed_signal_preemp,nfft))));
+    ncep_array = [13, 26, 40];
+    <span class="keyword">for</span> i=1:3
+</pre><pre class="codeinput">        ncep = ncep_array(i);
+        lifter = zeros(1,nfft);
+        lifter(1:ncep) = 1;
+        lifter((end-ncep):end) = 1;
+
+        liftered_spectrum = cepstrum_preemp.*lifter;
+        figure()
+        subplot(211)
+        grid <span class="string">on</span>
+        plot(cepstrum_preemp(1:(nfft/2)));
+        title(strcat(sound_name, <span class="string">' Cepstrum and lifter for first '</span>, int2str(ncep), <span class="string">' coefficients'</span>));
+        hold <span class="string">on</span>
+        plot(lifter(1:(nfft/2)), <span class="string">'r'</span>);
+        legend (<span class="string">'Cepstrum'</span>,<span class="string">'Lifter'</span>)
+
+        grid <span class="string">on</span>
+        subplot(212)
+        plot(liftered_spectrum(1:(nfft/2)))
+        grid <span class="string">on</span>
+        title(strcat(sound_name, <span class="string">' Liftered Cepstrum with '</span>, int2str(ncep), <span class="string">' coefficients'</span>));
+</pre><img vspace="5" hspace="5" src="code_02.png" alt=""> <img vspace="5" hspace="5" src="code_04.png" alt=""> <img vspace="5" hspace="5" src="code_06.png" alt=""> <img vspace="5" hspace="5" src="code_10.png" alt=""> <img vspace="5" hspace="5" src="code_12.png" alt=""> <img vspace="5" hspace="5" src="code_14.png" alt=""> <img vspace="5" hspace="5" src="code_18.png" alt=""> <img vspace="5" hspace="5" src="code_20.png" alt=""> <img vspace="5" hspace="5" src="code_22.png" alt=""> <img vspace="5" hspace="5" src="code_26.png" alt=""> <img vspace="5" hspace="5" src="code_28.png" alt=""> <img vspace="5" hspace="5" src="code_30.png" alt=""> <img vspace="5" hspace="5" src="code_34.png" alt=""> <img vspace="5" hspace="5" src="code_36.png" alt=""> <img vspace="5" hspace="5" src="code_38.png" alt=""> <h2>Estimating Spectral Envelope using Cepstral Coefficients<a name="7"></a></h2><pre class="codeinput">        liftered_spectrum_fft = (fft(liftered_spectrum, nfft));
+        figure
+        plot(freq_axis, log(abs(exp(liftered_spectrum_fft(1:(nfft/2))))), <span class="string">'r'</span>)
+        grid <span class="string">on</span>
+        title(strcat(sound_name, <span class="string">' Spectral envelope with '</span>, int2str(ncep), <span class="string">' cepstral coefficients'</span>));
+        hold <span class="string">on</span>
+        plot(freq_axis, log(abs(spectrum_preemp(1:(nfft/2)))))
+        legend (<span class="string">'Estimated spectral envelope'</span>,<span class="string">'Signal Spectrum'</span>)
+</pre><img vspace="5" hspace="5" src="code_03.png" alt=""> <img vspace="5" hspace="5" src="code_05.png" alt=""> <img vspace="5" hspace="5" src="code_07.png" alt=""> <img vspace="5" hspace="5" src="code_11.png" alt=""> <img vspace="5" hspace="5" src="code_13.png" alt=""> <img vspace="5" hspace="5" src="code_15.png" alt=""> <img vspace="5" hspace="5" src="code_19.png" alt=""> <img vspace="5" hspace="5" src="code_21.png" alt=""> <img vspace="5" hspace="5" src="code_23.png" alt=""> <img vspace="5" hspace="5" src="code_27.png" alt=""> <img vspace="5" hspace="5" src="code_29.png" alt=""> <img vspace="5" hspace="5" src="code_31.png" alt=""> <img vspace="5" hspace="5" src="code_35.png" alt=""> <img vspace="5" hspace="5" src="code_37.png" alt=""> <img vspace="5" hspace="5" src="code_39.png" alt=""> <h2>Pitch Estimation<a name="8"></a></h2><pre class="codeinput">        pitch_lifter = ones(1, nfft) - lifter;
+        pitch_liftered_spectrum = cepstrum_preemp.*pitch_lifter;
+        [max_value, max_index] = max(pitch_liftered_spectrum(1:(nfft/2)));
+        pitch_freq = fs / max_index;
+        <span class="keyword">if</span> i == 1
+            disp(strcat(sound, <span class="string">' Pitch Frequency estimated : '</span>,  num2str(pitch_freq)));
+        <span class="keyword">end</span>
+</pre><pre class="codeoutput">aa Pitch Frequency estimated :125
+</pre><pre class="codeoutput">nn Pitch Frequency estimated :125
+</pre><pre class="codeoutput">ee Pitch Frequency estimated :131.1475
+</pre><pre class="codeoutput">ss Pitch Frequency estimated :1066.6667
+</pre><pre class="codeoutput">as Pitch Frequency estimated :125
+</pre><pre class="codeinput">    <span class="keyword">end</span>
+</pre><h2>Comparison of estimations using 10th order LPC and 13 Cepstral coefficients<a name="10"></a></h2><pre class="codeinput">    <span class="comment">% 10th Order LPC</span>
+    p = 10;
+    <span class="keyword">if</span> sound == <span class="string">'ss'</span>
+        p = 18;
+    <span class="keyword">end</span>
+    r = zeros(1,p+1);
+    <span class="keyword">for</span> k = 1:(p+1)
+        acr_sum = 0;
+        <span class="keyword">for</span> g = 1:(window_len-k+1)
+            acr_sum = Windowed_signal_preemp(g).*Windowed_signal_preemp(g+k-1) + acr_sum;
+        <span class="keyword">end</span>
+        r(k) = acr_sum;
+    <span class="keyword">end</span>
+
+    [A, EE, K] = levinson(r, p);
+    <span class="comment">%f_axis = -4000:4000/(nfft/2):4000 - 4000/(nfft/2);</span>
+    <span class="comment">%Residual_error_energy(c) = EE;</span>
+    A_z = sqrt(EE)./((fft(A,nfft)));
+
+    <span class="comment">% 13 Cepstral Coefficients</span>
+    lifter = zeros(1,nfft);
+    lifter(1:13) = 1;
+    lifter((end-13):end) = 1;
+
+    liftered_spectrum = cepstrum_preemp.*lifter;
+    liftered_spectrum_fft = (fft(liftered_spectrum, nfft));
+
+
+    <span class="keyword">if</span> sound ~= <span class="string">'ss'</span>
+        figure
+        plot(freq_axis, log(abs(exp(liftered_spectrum_fft(1:(nfft/2))))), <span class="string">'r'</span>)
+        grid <span class="string">on</span>
+        title(strcat(sound_name, <span class="string">' 10th order LPC vs 13 cepstral coefficients'</span>));
+        hold <span class="string">on</span>
+        plot(freq_axis, log(abs(spectrum_preemp(1:(nfft/2)))))
+        hold <span class="string">on</span>
+        plot(freq_axis,log(abs(A_z(1:(nfft/2)))),<span class="string">'g'</span>);
+        legend (<span class="string">'13 Cepstral coeffs'</span>,<span class="string">'Signal Spectrum'</span>,<span class="string">'10th order LPC'</span>)
+
+    <span class="keyword">else</span>
+        figure
+        plot(freq_axis, log(abs(exp(liftered_spectrum_fft(1:(nfft/2))))), <span class="string">'r'</span>)
+        grid <span class="string">on</span>
+        title(strcat(sound_name, <span class="string">' 18th order LPC vs 13 cepstral coefficients'</span>));
+        hold <span class="string">on</span>
+        plot(freq_axis, log(abs(spectrum_preemp(1:(nfft/2)))))
+        hold <span class="string">on</span>
+        plot(freq_axis,log(abs(A_z(1:(nfft/2)))),<span class="string">'g'</span>);
+        legend (<span class="string">'13 Cepstral coeffs'</span>,<span class="string">'Signal Spectrum'</span>,<span class="string">'18th order LPC'</span>)
+
+    <span class="keyword">end</span>
+</pre><img vspace="5" hspace="5" src="code_08.png" alt=""> <img vspace="5" hspace="5" src="code_16.png" alt=""> <img vspace="5" hspace="5" src="code_24.png" alt=""> <img vspace="5" hspace="5" src="code_32.png" alt=""> <img vspace="5" hspace="5" src="code_40.png" alt=""> <pre class="codeinput"><span class="keyword">end</span>
+</pre><p class="footer"><br>
+            Published with MATLAB&reg; 7.8<br></p>
+      </div>
+      <!--
+##### SOURCE BEGIN #####
+
+
+%%
+clear all
+close all
+clc
+
+%REPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASH-ANKIT AGRAWAL
+%REPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASH-10D070027
+
+sounds = ['aa', 'nn', 'ee', 'ss', 'as'];
+for index = 1:5
+    sound = sounds(2*index-1:2*index);
+    %% Speech signal
+    % Preparing the initial parameters
+    if sound == 'as'
+        sound_name = 'aa resynthesized';
+    else
+        sound_name = sound;
+    end
+    [x fs] = wavread(strcat(sound, '.wav'));
+    x = x';
+    nfft = 1024;
+    window_len = 0.03*fs;
+    n = 0:window_len-1;
+    hw = 0.54-0.46*cos(2*pi*n/(window_len-1));
+
+    freq_axis = (fs/nfft).*(0:(nfft/2 - 1));
+    time_axis = 1000*[0:(1/fs):(window_len - 1)/fs];
+
+
+    %% Pre-Emphasized Windowed Signal
+    b = 0.95;
+    x_pe = zeros(1, length(x));
+    x_pe(1) = x(1);
+    for n = 2:length(x)
+        x_pe(n) = x(n) - b*x(n-1);
+    end
+
+    Windowed_signal_preemp = x_pe(100:100+window_len-1).*hw;
+    spectrum_preemp = fft(Windowed_signal_preemp,nfft);
+    
+    figure()
+    subplot(211)
+    plot(time_axis, Windowed_signal_preemp)
+    grid on
+    title(strcat(sound_name, ' Preemphasized Windowed Signal'));
+    xlabel('Time (ms)');
+    grid on;
+    subplot(212)
+    plot(freq_axis, log(abs(spectrum_preemp(1:(nfft/2)))))
+    grid on
+    title(strcat(sound_name, ' Log Magnitude Spectrum of Preemphasized Windowed Signal'));
+    xlabel('Frequency (Hz)');
+    grid on;
+
+    %% Cepstral Analysis
+    cepstrum_preemp = ifft(log(abs(fft(Windowed_signal_preemp,nfft))));
+    ncep_array = [13, 26, 40];
+    for i=1:3
+        ncep = ncep_array(i);
+        lifter = zeros(1,nfft);
+        lifter(1:ncep) = 1;
+        lifter((end-ncep):end) = 1;
+        
+        liftered_spectrum = cepstrum_preemp.*lifter;
+        figure()
+        subplot(211)
+        grid on
+        plot(cepstrum_preemp(1:(nfft/2)));
+        title(strcat(sound_name, ' Cepstrum and lifter for first ', int2str(ncep), ' coefficients'));
+        hold on
+        plot(lifter(1:(nfft/2)), 'r');
+        legend ('Cepstrum','Lifter')
+
+        grid on
+        subplot(212)
+        plot(liftered_spectrum(1:(nfft/2)))
+        grid on
+        title(strcat(sound_name, ' Liftered Cepstrum with ', int2str(ncep), ' coefficients'));
+        
+        %% Estimating Spectral Envelope using Cepstral Coefficients
+        liftered_spectrum_fft = (fft(liftered_spectrum, nfft));
+        figure
+        plot(freq_axis, log(abs(exp(liftered_spectrum_fft(1:(nfft/2))))), 'r')
+        grid on
+        title(strcat(sound_name, ' Spectral envelope with ', int2str(ncep), ' cepstral coefficients'));
+        hold on
+        plot(freq_axis, log(abs(spectrum_preemp(1:(nfft/2)))))
+        legend ('Estimated spectral envelope','Signal Spectrum')
+
+        %% Pitch Estimation
+        pitch_lifter = ones(1, nfft) - lifter;
+        pitch_liftered_spectrum = cepstrum_preemp.*pitch_lifter;
+        [max_value, max_index] = max(pitch_liftered_spectrum(1:(nfft/2)));
+        pitch_freq = fs / max_index;
+        if i == 1
+            disp(strcat(sound, ' Pitch Frequency estimated : ',  num2str(pitch_freq)));
+        end
+        
+    end
+    
+    %% Comparison of estimations using 10th order LPC and 13 Cepstral coefficients
+    
+    % 10th Order LPC
+    p = 10;
+    if sound == 'ss'
+        p = 18;
+    end
+    r = zeros(1,p+1);
+    for k = 1:(p+1)
+        acr_sum = 0;
+        for g = 1:(window_len-k+1)
+            acr_sum = Windowed_signal_preemp(g).*Windowed_signal_preemp(g+k-1) + acr_sum;
+        end
+        r(k) = acr_sum;
+    end
+    
+    [A, EE, K] = levinson(r, p);
+    %f_axis = -4000:4000/(nfft/2):4000 - 4000/(nfft/2);
+    %Residual_error_energy(c) = EE;
+    A_z = sqrt(EE)./((fft(A,nfft)));
+
+    % 13 Cepstral Coefficients
+    lifter = zeros(1,nfft);
+    lifter(1:13) = 1;
+    lifter((end-13):end) = 1;
+    
+    liftered_spectrum = cepstrum_preemp.*lifter;
+    liftered_spectrum_fft = (fft(liftered_spectrum, nfft));
+
+    
+    if sound ~= 'ss'
+        figure
+        plot(freq_axis, log(abs(exp(liftered_spectrum_fft(1:(nfft/2))))), 'r')
+        grid on
+        title(strcat(sound_name, ' 10th order LPC vs 13 cepstral coefficients'));
+        hold on
+        plot(freq_axis, log(abs(spectrum_preemp(1:(nfft/2)))))
+        hold on
+        plot(freq_axis,log(abs(A_z(1:(nfft/2)))),'g');
+        legend ('13 Cepstral coeffs','Signal Spectrum','10th order LPC')
+    
+    else
+        figure
+        plot(freq_axis, log(abs(exp(liftered_spectrum_fft(1:(nfft/2))))), 'r')
+        grid on
+        title(strcat(sound_name, ' 18th order LPC vs 13 cepstral coefficients'));
+        hold on
+        plot(freq_axis, log(abs(spectrum_preemp(1:(nfft/2)))))
+        hold on
+        plot(freq_axis,log(abs(A_z(1:(nfft/2)))),'g');
+        legend ('13 Cepstral coeffs','Signal Spectrum','18th order LPC')
+
+    end
+    
+end
+
+
+##### SOURCE END #####
+-->
+   </body>
+</html>

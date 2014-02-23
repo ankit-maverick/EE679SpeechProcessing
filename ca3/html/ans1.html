@@ -1,0 +1,480 @@
+
+<!DOCTYPE html
+  PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+   <head>
+      <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+   
+      <!--
+This HTML is auto-generated from an M-file.
+To make changes, update the M-file and republish this document.
+      -->
+      <title>ans1</title>
+      <meta name="generator" content="MATLAB 7.8">
+      <meta name="date" content="2013-10-31">
+      <meta name="m-file" content="ans1"><style type="text/css">
+
+body {
+  background-color: white;
+  margin:10px;
+}
+
+h1 {
+  color: #990000; 
+  font-size: x-large;
+}
+
+h2 {
+  color: #990000;
+  font-size: medium;
+}
+
+/* Make the text shrink to fit narrow windows, but not stretch too far in 
+wide windows. */ 
+p,h1,h2,div.content div {
+  max-width: 600px;
+  /* Hack for IE6 */
+  width: auto !important; width: 600px;
+}
+
+pre.codeinput {
+  background: #EEEEEE;
+  padding: 10px;
+}
+@media print {
+  pre.codeinput {word-wrap:break-word; width:100%;}
+} 
+
+span.keyword {color: #0000FF}
+span.comment {color: #228B22}
+span.string {color: #A020F0}
+span.untermstring {color: #B20000}
+span.syscmd {color: #B28C00}
+
+pre.codeoutput {
+  color: #666666;
+  padding: 10px;
+}
+
+pre.error {
+  color: red;
+}
+
+p.footer {
+  text-align: right;
+  font-size: xx-small;
+  font-weight: lighter;
+  font-style: italic;
+  color: gray;
+}
+
+  </style></head>
+   <body>
+      <div class="content">
+         <h1></h1>
+         <!--introduction-->
+         <!--/introduction-->
+         <h2>Contents</h2>
+         <div>
+            <ul>
+               <li><a href="#3">Speech signal</a></li>
+               <li><a href="#4">Windowed Signal</a></li>
+               <li><a href="#5">Pre-Emphasized Windowed Signal</a></li>
+               <li><a href="#6">Autocorrelation coefficients</a></li>
+               <li><a href="#8">Calculating LPC Coefficients and the corresponding Spectrum</a></li>
+               <li><a href="#9">Pole-zero plots</a></li>
+               <li><a href="#10">Residual Error and its Spectrum</a></li>
+               <li><a href="#12">Residual error energy vs No of poles used in Estimation</a></li>
+            </ul>
+         </div><pre class="codeinput">clear <span class="string">all</span>
+close <span class="string">all</span>
+clc
+
+<span class="comment">%-----ANKIT AGRAWAL</span>
+<span class="comment">%-----10D070027</span>
+
+sounds = [<span class="string">'aa'</span>, <span class="string">'nn'</span>, <span class="string">'ee'</span>, <span class="string">'ss'</span>];
+<span class="keyword">for</span> index = 1:4
+</pre><pre class="codeinput">    sound = sounds(2*index-1:2*index);
+</pre><h2>Speech signal<a name="3"></a></h2><pre class="codeinput">    <span class="comment">%Preparing the initial parameters</span>
+    [x fs] = wavread(strcat(sound, <span class="string">'.wav'</span>));
+    x = x';
+    window_len = 0.03*fs;
+    n = 0:window_len-1;
+    hw = 0.54-0.46*cos(2*pi*n/(window_len-1));
+
+    figure(1)
+    subplot(211)
+    plot(x)
+    grid <span class="string">on</span>
+    title(strcat(sound, <span class="string">' Speech signal'</span>))
+    subplot(212)
+    plot(hw)
+    title(<span class="string">'Hamming Window of length 240'</span>)
+</pre><img vspace="5" hspace="5" src="ans1_01.png" alt=""> <img vspace="5" hspace="5" src="ans1_17.png" alt=""> <img vspace="5" hspace="5" src="ans1_33.png" alt=""> <img vspace="5" hspace="5" src="ans1_49.png" alt=""> <h2>Windowed Signal<a name="4"></a></h2><pre class="codeinput">    Windowed_signal = x(100:100+window_len-1).*hw;
+    spectrum = fft(Windowed_signal,1024);
+    freq_axis = (fs/1024).*(0:511);
+    time_axis = 1000*[0:(1/fs):239/fs];
+
+    figure(2)
+    subplot(211)
+    plot(time_axis, Windowed_signal)
+    grid <span class="string">on</span>
+    title(strcat(sound, <span class="string">' Windowed Signal'</span>))
+    xlabel(<span class="string">'Time (ms)'</span>)
+    subplot(212)
+    plot(freq_axis, 20*log10(abs(spectrum(1:512))))
+    grid <span class="string">on</span>
+    title(strcat(sound, <span class="string">' STFT without Pre-emphasis'</span>))
+    xlabel(<span class="string">'Frequency (Hz)'</span>)
+</pre><img vspace="5" hspace="5" src="ans1_02.png" alt=""> <img vspace="5" hspace="5" src="ans1_18.png" alt=""> <img vspace="5" hspace="5" src="ans1_34.png" alt=""> <img vspace="5" hspace="5" src="ans1_50.png" alt=""> <h2>Pre-Emphasized Windowed Signal<a name="5"></a></h2><pre class="codeinput">    b = 0.95;
+    x_pe = zeros(1, length(x));
+    x_pe(1) = x(1);
+    <span class="keyword">for</span> n = 2:length(x)
+        x_pe(n) = x(n) - b*x(n-1);
+    <span class="keyword">end</span>
+
+    Windowed_signal_preemp = x_pe(100:100+window_len-1).*hw;
+    spectrum_preemp = fft(Windowed_signal_preemp,1024);
+    figure(3)
+    subplot(211)
+    plot(time_axis, Windowed_signal_preemp)
+    grid <span class="string">on</span>
+    title(strcat(sound, <span class="string">' Preemphasized Windowed Signal'</span>));
+    xlabel(<span class="string">'Time (ms)'</span>);
+    grid <span class="string">on</span>;
+    subplot(212)
+    plot(freq_axis, 20*log10(abs(spectrum_preemp(1:512))))
+    grid <span class="string">on</span>
+    title(strcat(sound, <span class="string">' STFT of Preemphasized Windowed Signal'</span>));
+    xlabel(<span class="string">'Frequency (Hz)'</span>);
+    grid <span class="string">on</span>;
+</pre><img vspace="5" hspace="5" src="ans1_03.png" alt=""> <img vspace="5" hspace="5" src="ans1_19.png" alt=""> <img vspace="5" hspace="5" src="ans1_35.png" alt=""> <img vspace="5" hspace="5" src="ans1_51.png" alt=""> <h2>Autocorrelation coefficients<a name="6"></a></h2><pre class="codeinput">    <span class="comment">% Set of pole values</span>
+    p_array = [4 6 8 10 12 20];
+
+    <span class="keyword">for</span> c = 1:6
+</pre><pre class="codeinput">        p = p_array(c);
+        r = zeros(1,p+1);
+        <span class="keyword">for</span> k = 1:(p+1)
+            acr_sum = 0;
+            <span class="keyword">for</span> g = 1:(window_len-k+1)
+                <span class="comment">%acr_sum = Windowed_signal(g).*Windowed_signal(g+k-1) + acr_sum;</span>
+                acr_sum = Windowed_signal_preemp(g).*Windowed_signal_preemp(g+k-1) + acr_sum;
+            <span class="keyword">end</span>
+            r(k) = acr_sum;
+        <span class="keyword">end</span>
+</pre><h2>Calculating LPC Coefficients and the corresponding Spectrum<a name="8"></a></h2>
+         <p>For all the sounds, the estimated spectrum fits better as the number of poles in the model increases. The all-pole model although
+            originally derived for vowels, works impressively well for the nasal consant /n/ and the fricative /s/ as can be observed,
+            especially for the higher orders of estimation. Another point discussed in the class that can be observed is that the actual
+            spectrum has lesser part above the estimated spectrum and a greater part below the estimated spectrum.
+         </p><pre class="codeinput">        [A, EE, K] = levinson(r, p);
+        f_axis = -4000:4000/512:4000 - 4000/512;
+
+        Residual_error_energy(c) = EE;
+
+        A_z = sqrt(EE)./(fftshift(fft(A,1024)));
+        figure;
+        <span class="comment">%plot(freq_axis,20*log10(abs(spectrum(513:1024))));</span>
+        plot(f_axis,20*log10(abs(fftshift(spectrum_preemp))));
+        hold <span class="string">on</span>
+        plot(f_axis,20*log10(abs(A_z)),<span class="string">'r'</span>);
+        grid <span class="string">on</span>
+        title(strcat(sound, <span class="string">' LPC Spectrum (dB) for p= '</span>, int2str(p)));
+        xlabel(<span class="string">'Frequency (Hz)'</span>);
+        ylabel(<span class="string">'Magnitude (dB)'</span>);
+</pre><img vspace="5" hspace="5" src="ans1_04.png" alt=""> <img vspace="5" hspace="5" src="ans1_05.png" alt=""> <img vspace="5" hspace="5" src="ans1_07.png" alt=""> <img vspace="5" hspace="5" src="ans1_08.png" alt=""> <img vspace="5" hspace="5" src="ans1_14.png" alt=""> <img vspace="5" hspace="5" src="ans1_15.png" alt=""> <img vspace="5" hspace="5" src="ans1_20.png" alt=""> <img vspace="5" hspace="5" src="ans1_21.png" alt=""> <img vspace="5" hspace="5" src="ans1_23.png" alt=""> <img vspace="5" hspace="5" src="ans1_24.png" alt=""> <img vspace="5" hspace="5" src="ans1_30.png" alt=""> <img vspace="5" hspace="5" src="ans1_31.png" alt=""> <img vspace="5" hspace="5" src="ans1_36.png" alt=""> <img vspace="5" hspace="5" src="ans1_37.png" alt=""> <img vspace="5" hspace="5" src="ans1_39.png" alt=""> <img vspace="5" hspace="5" src="ans1_40.png" alt=""> <img vspace="5" hspace="5" src="ans1_46.png" alt=""> <img vspace="5" hspace="5" src="ans1_47.png" alt=""> <img vspace="5" hspace="5" src="ans1_52.png" alt=""> <img vspace="5" hspace="5" src="ans1_53.png" alt=""> <img vspace="5" hspace="5" src="ans1_55.png" alt=""> <img vspace="5" hspace="5" src="ans1_56.png" alt=""> <img vspace="5" hspace="5" src="ans1_62.png" alt=""> <img vspace="5" hspace="5" src="ans1_63.png" alt=""> <h2>Pole-zero plots<a name="9"></a></h2><pre class="codeinput">        <span class="keyword">if</span> (p==6 || p==10)
+            t = roots(A);
+            [re,im] = cart2pol(real(t), imag(t));
+            figure;
+            polar(re, im, <span class="string">'X'</span>);
+            title(strcat(sound, <span class="string">' Pole-zero plot for p= '</span>, int2str(p)));
+        <span class="keyword">end</span>
+</pre><img vspace="5" hspace="5" src="ans1_06.png" alt=""> <img vspace="5" hspace="5" src="ans1_09.png" alt=""> <img vspace="5" hspace="5" src="ans1_22.png" alt=""> <img vspace="5" hspace="5" src="ans1_25.png" alt=""> <img vspace="5" hspace="5" src="ans1_38.png" alt=""> <img vspace="5" hspace="5" src="ans1_41.png" alt=""> <img vspace="5" hspace="5" src="ans1_54.png" alt=""> <img vspace="5" hspace="5" src="ans1_57.png" alt=""> <h2>Residual Error and its Spectrum<a name="10"></a></h2>
+         <p>The co-efficients of A(z) are calculated using Levinson's algorithm. Pitch can be estimated by observing the difference(~126
+            in this case) in x-axis between two peaks in the Auto-correlation of the residual error signal. Gain is the square root of
+            EE returned by levinson's algorithm. /s/ being a fricative, is not excited using impulses and this can be observed in its
+            noisy residue error signal.
+         </p><pre class="codeinput">        <span class="keyword">if</span> (p==10)
+            r = xcorr(x);
+            r = r((length(r) + 1)/2:length(r));
+            [A, EE, K] = levinson(r, p);
+            e = filter(A, 1, x);
+            e = e(1:length(x));
+            E = fftshift(fft(e, 1024));
+            e_acr = xcorr(e);
+
+            figure;
+            plot(e);
+            title(strcat(sound, <span class="string">' Residual Error e(n) for p= '</span>, int2str(p)));
+            ylabel(<span class="string">'Amplitude'</span>);
+            grid <span class="string">on</span>;
+
+            figure;
+            plot(f_axis,20*log10(abs(E)));
+            title(strcat(sound, <span class="string">' Spectrum of Residual Error e(n) for p= '</span>, int2str(p)));
+            xlabel(<span class="string">'Frequency (Hz)'</span>);
+            ylabel(<span class="string">'Magnitude (dB)'</span>);
+
+            figure;
+            plot(1:length(e_acr),e_acr);
+            title(strcat(sound, <span class="string">' ACR of Residual Error e(n) for p= '</span>, int2str(p)));
+
+            pitch_period = 126;
+            N = fs/pitch_period;
+            N = floor(N);
+
+
+            <span class="keyword">if</span> (index&lt;4)
+                impulse_train = zeros(1, 2400);
+
+                impulse_train(1) = 1;
+                <span class="keyword">for</span> j = 2:length(impulse_train)
+                    <span class="keyword">if</span> (rem(j,N)==0)
+                        impulse_train(j+1) = 1;
+                    <span class="keyword">end</span>
+                <span class="keyword">end</span>
+                y = filter(1,A,impulse_train);
+            <span class="keyword">end</span>
+
+
+            <span class="keyword">if</span> (index==4)
+                noise = randn(1, 2400);
+                noise=noise/max(noise); <span class="comment">%normalize</span>
+                noise = noise.*max(x);
+                y = filter(1,A,noise);
+            <span class="keyword">end</span>
+            m = max(abs(y));
+            y = y/(m + 0.001); <span class="comment">% Avoiding zero-dision error</span>
+            soundsc(y);
+            wavwrite(y,fs,strcat(sound, <span class="string">'_resynthesized.wav'</span>));
+            figure;
+            plot(y(1:length(x))*m);
+            grid <span class="string">on</span>;
+            hold <span class="string">on</span>;
+            plot(x,<span class="string">'r'</span>);
+            legend (<span class="string">'Resynthesized signal'</span>,<span class="string">'Original Signal'</span>)
+            title(strcat(sound, <span class="string">' Resynthesized Signal'</span>))
+        <span class="keyword">end</span>
+</pre><img vspace="5" hspace="5" src="ans1_10.png" alt=""> <img vspace="5" hspace="5" src="ans1_11.png" alt=""> <img vspace="5" hspace="5" src="ans1_12.png" alt=""> <img vspace="5" hspace="5" src="ans1_13.png" alt=""> <img vspace="5" hspace="5" src="ans1_26.png" alt=""> <img vspace="5" hspace="5" src="ans1_27.png" alt=""> <img vspace="5" hspace="5" src="ans1_28.png" alt=""> <img vspace="5" hspace="5" src="ans1_29.png" alt=""> <img vspace="5" hspace="5" src="ans1_42.png" alt=""> <img vspace="5" hspace="5" src="ans1_43.png" alt=""> <img vspace="5" hspace="5" src="ans1_44.png" alt=""> <img vspace="5" hspace="5" src="ans1_45.png" alt=""> <img vspace="5" hspace="5" src="ans1_58.png" alt=""> <img vspace="5" hspace="5" src="ans1_59.png" alt=""> <img vspace="5" hspace="5" src="ans1_60.png" alt=""> <img vspace="5" hspace="5" src="ans1_61.png" alt=""> <pre class="codeinput">    <span class="keyword">end</span>
+</pre><h2>Residual error energy vs No of poles used in Estimation<a name="12"></a></h2><pre class="codeinput">        figure;
+        plot(p_array, Residual_error_energy);
+        grid <span class="string">on</span>;
+        title(strcat(sound, <span class="string">' Residual Error Energy vs Estimation order(p)'</span>))
+</pre><img vspace="5" hspace="5" src="ans1_16.png" alt=""> <img vspace="5" hspace="5" src="ans1_32.png" alt=""> <img vspace="5" hspace="5" src="ans1_48.png" alt=""> <img vspace="5" hspace="5" src="ans1_64.png" alt=""> <pre class="codeinput"><span class="keyword">end</span>
+</pre><p class="footer"><br>
+            Published with MATLAB&reg; 7.8<br></p>
+      </div>
+      <!--
+##### SOURCE BEGIN #####
+
+
+%%
+clear all
+close all
+clc
+
+%REPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASH-ANKIT AGRAWAL
+%REPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASH-10D070027
+
+sounds = ['aa', 'nn', 'ee', 'ss'];
+for index = 1:4
+    sound = sounds(2*index-1:2*index);
+    %% Speech signal
+    %Preparing the initial parameters
+    [x fs] = wavread(strcat(sound, '.wav'));
+    x = x';
+    window_len = 0.03*fs;
+    n = 0:window_len-1;
+    hw = 0.54-0.46*cos(2*pi*n/(window_len-1));
+
+    figure(1)
+    subplot(211)
+    plot(x)
+    grid on
+    title(strcat(sound, ' Speech signal'))
+    subplot(212)
+    plot(hw)
+    title('Hamming Window of length 240')
+
+    %% Windowed Signal
+    Windowed_signal = x(100:100+window_len-1).*hw;
+    spectrum = fft(Windowed_signal,1024);
+    freq_axis = (fs/1024).*(0:511);
+    time_axis = 1000*[0:(1/fs):239/fs];
+
+    figure(2)
+    subplot(211)
+    plot(time_axis, Windowed_signal)
+    grid on
+    title(strcat(sound, ' Windowed Signal'))
+    xlabel('Time (ms)')
+    subplot(212)
+    plot(freq_axis, 20*log10(abs(spectrum(1:512))))
+    grid on
+    title(strcat(sound, ' STFT without Pre-emphasis'))
+    xlabel('Frequency (Hz)')
+
+    %% Pre-Emphasized Windowed Signal
+    b = 0.95;
+    x_pe = zeros(1, length(x));
+    x_pe(1) = x(1);
+    for n = 2:length(x)
+        x_pe(n) = x(n) - b*x(n-1);
+    end
+
+    Windowed_signal_preemp = x_pe(100:100+window_len-1).*hw;
+    spectrum_preemp = fft(Windowed_signal_preemp,1024);
+    figure(3)
+    subplot(211)
+    plot(time_axis, Windowed_signal_preemp)
+    grid on
+    title(strcat(sound, ' Preemphasized Windowed Signal'));
+    xlabel('Time (ms)');
+    grid on;
+    subplot(212)
+    plot(freq_axis, 20*log10(abs(spectrum_preemp(1:512))))
+    grid on
+    title(strcat(sound, ' STFT of Preemphasized Windowed Signal'));
+    xlabel('Frequency (Hz)');
+    grid on;
+
+    %% Autocorrelation coefficients
+
+    % Set of pole values
+    p_array = [4 6 8 10 12 20];
+
+    for c = 1:6
+        p = p_array(c);
+        r = zeros(1,p+1);
+        for k = 1:(p+1)
+            acr_sum = 0;
+            for g = 1:(window_len-k+1)
+                %acr_sum = Windowed_signal(g).*Windowed_signal(g+k-1) + acr_sum;
+                acr_sum = Windowed_signal_preemp(g).*Windowed_signal_preemp(g+k-1) + acr_sum;
+            end
+            r(k) = acr_sum;
+        end
+
+        %% Calculating LPC Coefficients and the corresponding Spectrum
+        % For all the sounds, the estimated spectrum fits better as the
+        % number of poles in the model increases. The all-pole model
+        % although originally derived for vowels, works impressively well
+        % for the nasal consant /n/ and the fricative /s/ as can be
+        % observed, especially for the higher orders of estimation.
+        % Another point discussed in the class that can be observed
+        % is that the actual spectrum has lesser part above the estimated
+        % spectrum and a greater part below the estimated spectrum.
+        [A, EE, K] = levinson(r, p);
+        f_axis = -4000:4000/512:4000 - 4000/512;
+        
+        Residual_error_energy(c) = EE;
+        
+        A_z = sqrt(EE)./(fftshift(fft(A,1024)));
+        figure;
+        %plot(freq_axis,20*log10(abs(spectrum(513:1024))));
+        plot(f_axis,20*log10(abs(fftshift(spectrum_preemp))));
+        hold on
+        plot(f_axis,20*log10(abs(A_z)),'r');
+        grid on
+        title(strcat(sound, ' LPC Spectrum (dB) for p= ', int2str(p)));
+        xlabel('Frequency (Hz)');
+        ylabel('Magnitude (dB)');
+
+
+        %% Pole-zero plots
+        if (p==6 || p==10)
+            t = roots(A);
+            [re,im] = cart2pol(real(t), imag(t));
+            figure;
+            polar(re, im, 'X');
+            title(strcat(sound, ' Pole-zero plot for p= ', int2str(p)));
+        end
+        
+
+        %% Residual Error and its Spectrum
+        % The co-efficients of A(z) are calculated using Levinson's
+        % algorithm. Pitch can be estimated by observing the
+        % difference(~126 in this case) in
+        % x-axis between two peaks in the Auto-correlation of the residual
+        % error signal. Gain is the square root of EE returned by
+        % levinson's algorithm. /s/ being a fricative, is not excited using
+        % impulses and this can be observed in its noisy residue error
+        % signal.
+        if (p==10)
+            r = xcorr(x);
+            r = r((length(r) + 1)/2:length(r));
+            [A, EE, K] = levinson(r, p);
+            e = filter(A, 1, x);
+            e = e(1:length(x));
+            E = fftshift(fft(e, 1024));
+            e_acr = xcorr(e);
+
+            figure;
+            plot(e);
+            title(strcat(sound, ' Residual Error e(n) for p= ', int2str(p)));
+            ylabel('Amplitude');
+            grid on;
+
+            figure;
+            plot(f_axis,20*log10(abs(E)));
+            title(strcat(sound, ' Spectrum of Residual Error e(n) for p= ', int2str(p)));
+            xlabel('Frequency (Hz)');
+            ylabel('Magnitude (dB)');
+            
+            figure;
+            plot(1:length(e_acr),e_acr);
+            title(strcat(sound, ' ACR of Residual Error e(n) for p= ', int2str(p)));
+            
+            pitch_period = 126;
+            N = fs/pitch_period;
+            N = floor(N);
+
+
+            if (index<4)
+                impulse_train = zeros(1, 2400);
+
+                impulse_train(1) = 1;
+                for j = 2:length(impulse_train)
+                    if (rem(j,N)==0)
+                        impulse_train(j+1) = 1;
+                    end
+                end
+                y = filter(1,A,impulse_train);
+            end
+
+
+            if (index==4)
+                noise = randn(1, 2400);
+                noise=noise/max(noise); %normalize
+                noise = noise.*max(x);
+                y = filter(1,A,noise);
+            end
+            m = max(abs(y));
+            y = y/(m + 0.001); % Avoiding zero-dision error
+            soundsc(y);
+            wavwrite(y,fs,strcat(sound, '_resynthesized.wav'));
+            figure;
+            plot(y(1:length(x))*m);
+            grid on;
+            hold on;
+            plot(x,'r');
+            legend ('Resynthesized signal','Original Signal')
+            title(strcat(sound, ' Resynthesized Signal'))
+        end
+    end
+            %% Residual error energy vs No of poles used in Estimation
+        
+        figure;
+        plot(p_array, Residual_error_energy);
+        grid on;
+        title(strcat(sound, ' Residual Error Energy vs Estimation order(p)'))
+        
+
+end
+
+
+##### SOURCE END #####
+-->
+   </body>
+</html>

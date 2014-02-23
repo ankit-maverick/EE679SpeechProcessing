@@ -1,0 +1,6 @@
+function [mfccs] = get_mfccs(frame, Fs)
+
+% 39 dim MFCCs
+mfccs=melcepst(x,fs,'e0dD')
+
+
